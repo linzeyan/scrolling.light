@@ -1,10 +1,5 @@
 {
   "name": "scrolling-light",
   "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test",
-    "dev": "npx wrangler pages dev public",
-    "deploy": "npx wrangler pages deploy public --project-name scrolling-light"
-  }
+  "type": "module"
 }

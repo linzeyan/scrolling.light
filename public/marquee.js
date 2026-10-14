@@ -1,11 +1,28 @@
+import { boardRuns } from './state.js';
+
 /**
- * One line of text scrolling right to left across a board, as plain text or
- * as an LED dot matrix. Shared by the viewer and the editor preview, so the
- * preview is exactly what plays. Canvas rather than DOM because the LED look
- * samples the text once per dot.
+ * One line of text scrolling across a board, as plain text or as an LED dot
+ * matrix. Shared by the viewer and the editor preview, so the preview is
+ * exactly what plays. Canvas rather than DOM because the LED look samples the
+ * text once per dot.
  */
 
-const FONT_FAMILY = 'system-ui, -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif';
+const SYSTEM_FONT = 'system-ui, -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif';
+/** LED rows with the pixel font: its 14-pixel line plus a dark row above and below. */
+export const PIXEL_ROWS = 16;
+// The web fonts download only once a sign uses them. Characters they lack
+// fall back to the system font.
+const FONTS = {
+  system: { family: SYSTEM_FONT },
+  // Split into ~100 files by character, fetched as the text needs them.
+  noto: { family: `"Noto Sans TC Variable", ${SYSTEM_FONT}`, css: '/fonts/noto-sans-tc/wght.css' },
+  // Drawn on a 12px grid. At exactly one font pixel per dot its hand-placed
+  // pixels stay legible on 16 rows, where outline fonts turn to mush, so in
+  // LED mode it sets the rows. It has no bold, and a synthesized one smears.
+  pixel: { family: `"Cubic 11", ${SYSTEM_FONT}`, grid: 12, rows: PIXEL_ROWS, weight: 400 },
+};
+// Past this the sign opens in the fallback font rather than stay blank.
+const FONT_TIMEOUT = 3000;
 // Bold reads best as smooth text, but at one pixel per dot its strokes fill
 // the one-dot gaps between them and dense characters (歡, 臨) become blobs.
 const PLAIN_WEIGHT = 700;
@@ -44,15 +61,64 @@ function mix(bg, fg, t) {
  * board whatever the script. Cap height is the floor, so lowercase-only text
  * isn't blown up past where capitals would reach.
  */
-function fitText(ctx, text, inkHeight, weight) {
-  ctx.font = `${weight} 100px ${FONT_FAMILY}`;
+function fitText(ctx, text, inkHeight, weight, family) {
+  ctx.font = `${weight} 100px ${family}`;
   const m = ctx.measureText(text);
   const ascent = Math.max(m.actualBoundingBoxAscent, ctx.measureText('H').actualBoundingBoxAscent);
   const descent = Math.max(m.actualBoundingBoxDescent, 0);
   const k = inkHeight / (ascent + descent);
-  const font = `${weight} ${100 * k}px ${FONT_FAMILY}`;
+  const font = `${weight} ${100 * k}px ${family}`;
   ctx.font = font;
-  return { font, baseline: ascent * k, width: Math.ceil(ctx.measureText(text).width) };
+  return { font, baseline: ascent * k };
+}
+
+/** A pixel font at its grid size, one font pixel per dot, its ink centered on whole dots. */
+function gridText(ctx, text, inkHeight, { family, grid }) {
+  const font = `${grid}px ${family}`;
+  ctx.font = font;
+  const m = ctx.measureText(text);
+  const ascent = Math.ceil(m.actualBoundingBoxAscent);
+  const descent = Math.ceil(m.actualBoundingBoxDescent);
+  return { font, baseline: Math.round((inkHeight - ascent - descent) / 2) + ascent };
+}
+
+const weightOf = (s) => FONTS[s.font].weight ?? (s.led ? LED_WEIGHT : PLAIN_WEIGHT);
+
+const sheets = new Map();
+
+/** Resolves once the sign's font can draw everything it may show; null when there's nothing to wait for. */
+function loadFont(s) {
+  const f = FONTS[s.font];
+  if (f === FONTS.system) return null;
+  if (f.css && !sheets.has(f.css)) {
+    const link = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: f.css });
+    sheets.set(f.css, new Promise((done) => (link.onload = link.onerror = done)));
+    document.head.append(link);
+  }
+  const text = `${s.message}${s.zero ?? ''}0123456789:天`;
+  const load = (sheets.get(f.css) ?? Promise.resolve()).then(() => document.fonts.load(`${weightOf(s)} 100px ${f.family}`, text));
+  // ponytail: a font that arrives after the timeout shows from the next update
+  // or resize; listen for document.fonts `loadingdone` if that's ever too late.
+  return Promise.race([load, new Promise((done) => setTimeout(done, FONT_TIMEOUT))]).catch(() => {});
+}
+
+/** Width of the widest digit in the current font: every countdown digit gets a cell this wide. */
+function digitCell(ctx) {
+  return Math.max(...[...'0123456789'].map((d) => ctx.measureText(d).width));
+}
+
+/** Lays runs out left to right from `x`, drawing them if `draw`. Returns their width. */
+function runText(ctx, runs, x, y, cell, draw) {
+  let w = 0;
+  for (const run of runs) {
+    for (const piece of run.digits ? run.text.match(/\d|\D+/g) : [run.text]) {
+      const pw = ctx.measureText(piece).width;
+      const box = run.digits && /\d/.test(piece) ? cell : pw;
+      if (draw) ctx.fillText(piece, x + w + (box - pw) / 2, y);
+      w += box;
+    }
+  }
+  return w;
 }
 
 export class Marquee {
@@ -62,8 +128,13 @@ export class Marquee {
     this.lit = canvas(); // the moving text, drawn every frame
     this.settings = null;
     this.geo = null;
-    // Distance scrolled, in text heights, so a resize carries on instead of restarting.
-    this.travel = 0;
+    // How far into the current pass the text is, in text heights. Kept
+    // within one pass, so text that changes length (typing, a countdown)
+    // stays where it is instead of jumping, and a resize carries on.
+    this.phase = 0;
+    this.textKey = null;
+    this.deadline = null;
+    this.timer = null;
     this.raf = 0;
     this.last = 0;
     root.classList.add('mq');
@@ -73,11 +144,27 @@ export class Marquee {
   }
 
   update(settings) {
+    this.pending = settings;
+    // Held back until the font is in, so a sign doesn't open in a fallback
+    // font and then jump to its own, which may have other rows.
+    const ready = loadFont(settings);
+    if (!ready) return this.apply(settings);
+    ready.then(() => {
+      if (this.pending === settings) this.apply(settings);
+    });
+  }
+
+  apply(settings) {
     this.settings = settings;
+    // A timer runs from when it is first shown and restarts only when its length changes.
+    if (settings.timer === null) this.timer = null;
+    else if (this.timer?.seconds !== settings.timer) this.timer = { seconds: settings.timer, start: Date.now() };
+    this.deadline = this.timer ? this.timer.start + this.timer.seconds * 1000 : settings.until;
     this.layout();
   }
 
   destroy() {
+    this.pending = null;
     cancelAnimationFrame(this.raf);
     this.resizeObs.disconnect();
     this.root.replaceChildren();
@@ -101,15 +188,19 @@ export class Marquee {
     const g = this.grid.getContext('2d');
     g.fillStyle = `#${s.bg}`;
     g.fillRect(0, 0, W, H);
-    this.geo = s.led ? this.ledLayout(g, W, H, boardH, top) : this.plainLayout(W, H, boardH, top);
+    this.geo = s.led ? this.ledLayout(g, W, H, boardH, top) : { W, H, boardH, top, across: W };
+    this.textKey = null;
+    this.raster();
     // Drawn now, not on the next frame, so editing doesn't flash an empty board.
     this.draw();
-    if (!s.message.trim()) return;
+    if (!s.message.trim() && this.deadline === null) return;
     this.last = performance.now();
     const tick = (now) => {
       // Capped, so a tab coming back from the background resumes instead of jumping.
-      this.travel += (Math.min(100, Math.max(0, now - this.last)) / 1000) * s.speed;
+      this.phase += (Math.min(100, Math.max(0, now - this.last)) / 1000) * s.speed;
       this.last = now;
+      if (this.deadline !== null) this.raster();
+      this.wrap();
       this.draw();
       this.raf = requestAnimationFrame(tick);
     };
@@ -118,7 +209,7 @@ export class Marquee {
 
   ledLayout(g, W, H, boardH, top) {
     const s = this.settings;
-    const rows = s.led;
+    const rows = FONTS[s.font].rows ?? s.led;
     const pitch = boardH / rows;
     const cols = Math.max(1, Math.floor(W / pitch));
     const left = (W - cols * pitch) / 2;
@@ -137,50 +228,77 @@ export class Marquee {
     // Every frame is cut to this, turning lit cells into round LEDs.
     const mask = canvas(W, H);
     mask.getContext('2d').fill(dots);
-
-    // The text at one pixel per dot, thresholded so that at rest each LED is
-    // fully on or off. Its own colors are kept, so emoji light up in color.
-    const margin = Math.round(rows * LED_MARGIN);
-    const unit = rows - 2 * margin;
-    const text = canvas();
-    const t = text.getContext('2d', { willReadFrequently: true });
-    const fit = fitText(t, s.message, unit, LED_WEIGHT);
-    text.width = Math.max(1, Math.min(MAX_CANVAS_SIDE, fit.width));
-    text.height = rows;
-    t.font = fit.font; // resizing a canvas resets its context
-    t.fillStyle = `#${s.fg}`;
-    t.fillText(s.message, 0, margin + fit.baseline);
-    const img = t.getImageData(0, 0, text.width, rows);
-    for (let i = 3; i < img.data.length; i += 4) img.data[i] = img.data[i] >= LIT_ALPHA ? 255 : 0;
-    t.putImageData(img, 0, 0);
-
-    return { W, H, rows, cols, pitch, left, top, mask, text, frame: canvas(cols, rows), unit, across: cols, span: cols + text.width };
+    return { W, H, rows, cols, pitch, left, top, mask, frame: canvas(cols, rows), across: cols };
   }
 
-  plainLayout(W, H, boardH, top) {
-    const unit = boardH * PLAIN_INK;
-    const fit = fitText(this.lit.getContext('2d'), this.settings.message, unit, PLAIN_WEIGHT);
-    return { W, H, font: fit.font, baseline: top + (boardH - unit) / 2 + fit.baseline, unit, across: W, span: W + fit.width };
+  /** Re-renders the text when what the board shows has changed, such as a countdown ticking. */
+  raster() {
+    const { settings: s, geo: g } = this;
+    const runs = boardRuns(s, this.deadline, Date.now());
+    const key = runs.map((r) => r.text).join('\n');
+    if (key === this.textKey) return;
+    this.textKey = key;
+    g.blank = !key.trim();
+    const joined = runs.map((r) => r.text).join('');
+    const f = FONTS[s.font];
+    if (!s.led) {
+      const ctx = this.lit.getContext('2d');
+      const unit = g.boardH * PLAIN_INK;
+      const fit = fitText(ctx, joined, unit, weightOf(s), f.family);
+      const cell = digitCell(ctx);
+      Object.assign(g, { runs, cell, unit, font: fit.font, baseline: g.top + (g.boardH - unit) / 2 + fit.baseline });
+      g.width = runText(ctx, runs, 0, 0, cell, false);
+    } else {
+      // The text at one pixel per dot, thresholded so that at rest each LED
+      // is fully on or off. Its own colors are kept, so emoji light up in color.
+      const margin = Math.round(g.rows * LED_MARGIN);
+      const unit = g.rows - 2 * margin;
+      const text = canvas();
+      const t = text.getContext('2d', { willReadFrequently: true });
+      const fit = f.grid ? gridText(t, joined, unit, f) : fitText(t, joined, unit, weightOf(s), f.family);
+      const cell = digitCell(t);
+      text.width = Math.max(1, Math.min(MAX_CANVAS_SIDE, Math.ceil(runText(t, runs, 0, 0, cell, false))));
+      text.height = g.rows;
+      t.font = fit.font; // resizing a canvas resets its context
+      t.fillStyle = `#${s.fg}`;
+      runText(t, runs, 0, margin + fit.baseline, cell, true);
+      const img = t.getImageData(0, 0, text.width, g.rows);
+      for (let i = 3; i < img.data.length; i += 4) img.data[i] = img.data[i] >= LIT_ALPHA ? 255 : 0;
+      t.putImageData(img, 0, 0);
+      Object.assign(g, { text, unit, width: text.width });
+    }
+    g.span = g.across + g.width;
+    this.wrap();
+  }
+
+  /** Back to the start of a pass once the text is fully off the board. */
+  wrap() {
+    const g = this.geo;
+    const pass = g.span / g.unit;
+    if (this.phase >= pass) this.phase %= pass;
   }
 
   draw() {
     const { geo: g, settings: s } = this;
     const ctx = this.lit.getContext('2d');
     ctx.clearRect(0, 0, g.W, g.H);
-    if (!s.message.trim()) return;
-    // Enters at the right edge and leaves fully past the left before coming round again.
-    const x = g.across - ((this.travel * g.unit) % g.span);
+    if (g.blank) return;
+    // Enters at one edge and leaves fully past the other before coming round again.
+    const p = this.phase * g.unit;
+    const x = s.dir === 'right' ? p - g.width : g.across - p;
     if (!s.led) {
       ctx.font = g.font;
       ctx.fillStyle = `#${s.fg}`;
-      ctx.fillText(s.message, x, g.baseline);
+      runText(ctx, g.runs, x, g.baseline, g.cell, true);
       return;
     }
     const f = g.frame.getContext('2d');
     f.clearRect(0, 0, g.cols, g.rows);
     // A fractional offset is filtered across neighbouring dots, so the text
-    // glides through fixed LEDs instead of jumping a whole dot at a time.
-    f.drawImage(g.text, x, 0);
+    // glides through fixed LEDs instead of jumping a whole dot at a time. A
+    // pixel font steps whole dots, like a real sign: blended across two dots,
+    // its glyphs would show as drawn on hardly any frame.
+    f.drawImage(g.text, FONTS[s.font].grid ? Math.round(x) : x, 0);
     const w = g.cols * g.pitch;
     const h = g.rows * g.pitch;
     ctx.imageSmoothingEnabled = false;

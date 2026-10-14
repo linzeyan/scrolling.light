@@ -1,0 +1,19 @@
+# Serves public/ the way Cloudflare Pages does, for self-hosting. Keep the
+# headers in step with public/_headers; test/headers.test.js checks it.
+:80 {
+	root * /usr/share/caddy
+	encode zstd gzip
+	header {
+		Content-Security-Policy "default-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+		Referrer-Policy no-referrer
+		X-Content-Type-Options nosniff
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# Pages' default. Files keep their names across deploys, so they are
+		# checked every time instead of guessed fresh from their age.
+		Cache-Control "public, max-age=0, must-revalidate"
+		-Server
+	}
+	# Every path is the app, which routes on the client, as on Pages.
+	try_files {path} /index.html
+	file_server
+}

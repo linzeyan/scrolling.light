@@ -1,6 +1,15 @@
 # Third-party notices
 
-`public/state.js` follows the URL fragment format of [BIGWORDS.PAGE](https://github.com/SpeakingOfBrad/BIGWORDS.PAGE) and adapts its fragment parsing and encoding code, used under the MIT License:
+## Fonts
+
+Both are served unmodified from `public/fonts/` under the SIL Open Font License 1.1, whose full text ships next to each font.
+
+- **Noto Sans TC** (variable), © Google Inc., via [Fontsource](https://fontsource.org/fonts/noto-sans-tc) `@fontsource-variable/noto-sans-tc` 5.3.1: `public/fonts/noto-sans-tc/`, license in `LICENSE` there.
+- **Cubic 11 (俐方體11號)** by ACh-K, [v1.500](https://github.com/ACh-K/Cubic-11/tree/v1.500), derived from JF Dot M+H 12 and the M+ bitmap fonts: `public/fonts/cubic-11/`, license and upstream notices in `OFL.txt` there.
+
+## BIGWORDS.PAGE
+
+`public/state.js` follows the URL fragment format of [BIGWORDS.PAGE](https://github.com/SpeakingOfBrad/BIGWORDS.PAGE) and adapts its fragment parsing, encoding and countdown parameter code, used under the MIT License:
 
 ```
 MIT License

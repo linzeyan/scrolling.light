@@ -1,3 +1,9 @@
+/* The pixel font for signs (marquee.js), downloaded only once a sign uses it.
+   Noto Sans TC has ~100 of these, so its stylesheet loads only when picked. */
+@font-face {
+  font-family: "Cubic 11";
+  src: url("/fonts/cubic-11/Cubic_11.woff2") format("woff2");
+}
 :root {
   color-scheme: dark;
   --bg: #0d0e11;
@@ -31,6 +37,9 @@ body.viewing {
   overflow: hidden;
   cursor: none;
 }
+body.viewing.bar {
+  cursor: auto;
+}
 
 /* Marquee: two stacked canvases filling their host. */
 .mq {
@@ -44,9 +53,48 @@ body.viewing {
   height: 100%;
   display: block;
 }
-.viewer {
+.viewer,
+.stage {
   position: fixed;
   inset: 0;
+}
+/* Fades out, then stops taking taps and focus. */
+.viewer-bar {
+  position: fixed;
+  left: 50%;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgb(22 24 29 / 0.88);
+  border: 1px solid rgb(255 255 255 / 0.1);
+  transform: translateX(-50%);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s,
+    visibility 0s 0.2s;
+}
+.bar .viewer-bar {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s;
+}
+.viewer-bar button {
+  height: 44px;
+  padding: 0 18px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  background: none;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.viewer-bar button:hover {
+  background: rgb(255 255 255 / 0.08);
 }
 
 /* Editor */
@@ -98,7 +146,10 @@ body.viewing {
 .field:has(:disabled) {
   opacity: 0.4;
 }
-textarea {
+textarea,
+input[type="text"],
+input[type="number"],
+input[type="datetime-local"] {
   width: 100%;
   resize: vertical;
   font: inherit;
@@ -119,6 +170,50 @@ input[type="range"] {
   width: 100%;
   margin: 0;
   accent-color: var(--accent);
+}
+.hms {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.hms label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* Radio buttons drawn as one pill, the chosen one filled in. */
+.segmented {
+  display: flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.segmented label {
+  position: relative;
+  padding: 6px 12px;
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.segmented input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.segmented label:has(:checked) {
+  color: #111;
+  background: var(--accent);
+}
+.segmented label:has(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .swatches {

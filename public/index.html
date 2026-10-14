@@ -6,7 +6,11 @@
     <title>SCROLLING.LIGHT 跑馬燈</title>
     <meta name="description" content="把一段文字變成滿版的 LED 跑馬燈。內容全在網址裡，不經過伺服器。" />
     <meta name="theme-color" content="#000000" />
+    <meta name="apple-mobile-web-app-title" content="跑馬燈" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="stylesheet" href="/style.css" />
     <script type="module" src="/app.js"></script>
   </head>
@@ -38,6 +42,22 @@
           <span class="label">速度 <output id="speed-out" for="speed"></output></span>
           <input type="range" id="speed" min="0.5" max="10" step="0.5" />
         </label>
+        <div class="field row">
+          <span class="label" id="dir-label">方向</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="dir-label">
+            <label><input type="radio" name="dir" value="left" />← 向左</label>
+            <label><input type="radio" name="dir" value="right" />向右 →</label>
+          </div>
+        </div>
+        <div class="field row">
+          <span class="label" id="font-label">字型</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="font-label">
+            <label><input type="radio" name="font" value="system" />系統</label>
+            <label><input type="radio" name="font" value="noto" />思源黑體</label>
+            <label><input type="radio" name="font" value="pixel" />俐方體</label>
+          </div>
+        </div>
+        <p class="hint">系統字型隨裝置不同；思源黑體每台都一樣，用到的字第一次要下載；俐方體是點陣字，LED 固定 16 列。</p>
         <label class="field row" for="led">
           <span class="label">LED 點陣</span>
           <input type="checkbox" id="led" class="switch" role="switch" />
@@ -46,14 +66,45 @@
           <span class="label">點陣解析度 <output id="rows-out" for="rows"></output></span>
           <input type="range" id="rows" min="8" max="64" step="1" value="32" />
         </label>
+        <div class="field row">
+          <span class="label" id="cd-label">倒數</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="cd-label">
+            <label><input type="radio" name="cd" value="off" />關</label>
+            <label><input type="radio" name="cd" value="until" />到指定時間</label>
+            <label><input type="radio" name="cd" value="timer" />計時</label>
+          </div>
+        </div>
+        <label class="field" for="until" id="until-field">
+          <span class="label">結束時間</span>
+          <input type="datetime-local" id="until" step="1" />
+        </label>
+        <div class="field" id="timer-field">
+          <span class="label" id="timer-label">長度</span>
+          <div class="hms" role="group" aria-labelledby="timer-label">
+            <label><input type="number" id="th" min="0" max="2376" inputmode="numeric" />時</label>
+            <label><input type="number" id="tm" min="0" max="59" inputmode="numeric" />分</label>
+            <label><input type="number" id="ts" min="0" max="59" inputmode="numeric" />秒</label>
+          </div>
+        </div>
+        <label class="field" for="zero" id="zero-field">
+          <span class="label">歸零後改顯示</span>
+          <input type="text" id="zero" placeholder="留空就停在 0:00" />
+        </label>
+        <p class="hint" id="cd-hint">文字裡的 {countdown} 會換成倒數。計時從打開畫面時開始。</p>
         <div class="actions">
           <button type="submit" id="play" class="primary">開始播放</button>
           <button type="button" id="copy">複製連結</button>
         </div>
         <input id="url" class="url" readonly aria-label="播放連結" />
-        <p class="hint">播放時點一下畫面切換全螢幕，按上一頁回到編輯。文字只存在網址裡，不會傳到伺服器。</p>
+        <p class="hint">播放時點一下畫面，可以回到編輯或切換全螢幕。iPhone 請用「加入主畫面」取得全螢幕，裝好後沒有網路也能開。文字只存在網址和這台裝置上，不會傳到伺服器。</p>
       </form>
     </main>
-    <div id="viewer" class="viewer" hidden></div>
+    <div id="viewer" class="viewer" hidden>
+      <div id="stage" class="stage"></div>
+      <div id="viewer-bar" class="viewer-bar">
+        <button type="button" id="edit">← 編輯</button>
+        <button type="button" id="fullscreen">全螢幕</button>
+      </div>
+    </div>
   </body>
 </html>

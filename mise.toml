@@ -1,0 +1,8 @@
+# Tools for working on the site, used by the Makefile. The site itself has no
+# dependencies: Cloudflare Pages serves public/ as it is, so nothing here runs
+# on deploy. Wrangler isn't listed: `mise exec` installs every listed tool
+# first, and its ~100 MB would hold up `make test`; `make dev` fetches it.
+[tools]
+node = "22"
+pnpm = "11.5.3"
+resvg = "0.48.1"

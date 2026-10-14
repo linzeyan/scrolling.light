@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@fontsource-variable/noto-sans-tc": "5.3.1"
+  }
+}
