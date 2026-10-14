@@ -1,5 +1,7 @@
+# Pages injects Cloudflare Web Analytics: its script, and where it reports.
+# The page URL it sends has the fragment (the message) stripped.
 /*
-  Content-Security-Policy: default-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'none'; form-action 'none'
   Referrer-Policy: no-referrer
   X-Content-Type-Options: nosniff
   Permissions-Policy: camera=(), microphone=(), geolocation=()

@@ -48,7 +48,7 @@
 
 ## 部署
 
-push 到 `main`，Cloudflare Pages 就會直接發布 `public/`。不需要 build，也沒有依賴要裝。`public/_redirects` 把 `/edit` 改寫到 `index.html`，`public/_headers` 設定 CSP 等安全標頭。
+push 到 `main`，Cloudflare Pages 就會直接發布 `public/`。不需要 build，也沒有依賴要裝。`public/_redirects` 把 `/edit` 改寫到 `index.html`，`public/_headers` 設定 CSP 等安全標頭。Pages 開了 Cloudflare Web Analytics，CSP 只放行它的腳本（`static.cloudflareinsights.com`）和回報位址（`cloudflareinsights.com`）。它回報的頁面網址不含 `#` 之後的訊息。
 
 ### 自架
 
