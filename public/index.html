@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>SCROLLING.LIGHT 跑馬燈</title>
+    <meta name="description" content="把一段文字變成滿版的 LED 跑馬燈。內容全在網址裡，不經過伺服器。" />
+    <meta name="theme-color" content="#000000" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <main id="editor" class="editor" hidden>
+      <h1 class="brand">SCROLLING.LIGHT</h1>
+      <div id="preview" class="preview"></div>
+      <form id="form" class="controls" autocomplete="off">
+        <label class="field" for="msg">
+          <span class="label">文字</span>
+          <textarea id="msg" rows="2" maxlength="500" placeholder="要捲動的文字"></textarea>
+        </label>
+        <div class="field row">
+          <span class="label" id="fg-label">文字顏色</span>
+          <div class="swatches" role="group" aria-labelledby="fg-label">
+            <button type="button" class="swatch" data-color="ffb000" aria-label="琥珀"></button>
+            <button type="button" class="swatch" data-color="ff3b30" aria-label="紅"></button>
+            <button type="button" class="swatch" data-color="30d158" aria-label="綠"></button>
+            <button type="button" class="swatch" data-color="0a84ff" aria-label="藍"></button>
+            <button type="button" class="swatch" data-color="ffffff" aria-label="白"></button>
+            <input type="color" id="fg" aria-label="自訂文字顏色" />
+          </div>
+        </div>
+        <label class="field row" for="bg">
+          <span class="label">背景顏色</span>
+          <input type="color" id="bg" />
+        </label>
+        <label class="field" for="speed">
+          <span class="label">速度 <output id="speed-out" for="speed"></output></span>
+          <input type="range" id="speed" min="0.5" max="10" step="0.5" />
+        </label>
+        <label class="field row" for="led">
+          <span class="label">LED 點陣</span>
+          <input type="checkbox" id="led" class="switch" role="switch" />
+        </label>
+        <label class="field" for="rows">
+          <span class="label">點陣解析度 <output id="rows-out" for="rows"></output></span>
+          <input type="range" id="rows" min="8" max="64" step="1" value="32" />
+        </label>
+        <div class="actions">
+          <button type="submit" id="play" class="primary">開始播放</button>
+          <button type="button" id="copy">複製連結</button>
+        </div>
+        <input id="url" class="url" readonly aria-label="播放連結" />
+        <p class="hint">播放時點一下畫面切換全螢幕，按上一頁回到編輯。文字只存在網址裡，不會傳到伺服器。</p>
+      </form>
+    </main>
+    <div id="viewer" class="viewer" hidden></div>
+  </body>
+</html>
